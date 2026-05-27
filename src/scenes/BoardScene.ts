@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameConfig } from '../config/gameConfig';
 import { GameState, PieceData, ToolData } from '../state/GameState';
+import { getLine } from '../config/lines';
 import { PieceView } from '../objects/Piece';
 import { ToolView } from '../objects/Tool';
 
@@ -59,7 +60,7 @@ export class BoardScene extends Phaser.Scene {
     for (const t of GameState.tools) this.spawnToolView(t);
     for (const p of GameState.pieces) this.spawnPieceView(p);
 
-    this.input.dragDistanceThreshold = 8;
+    this.input.dragDistanceThreshold = 10;
     this.input.on('drag', (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject, x: number, y: number) => {
       const g = obj as unknown as Phaser.GameObjects.Container;
       g.x = x;
@@ -131,7 +132,7 @@ export class BoardScene extends Phaser.Scene {
       const moved = Phaser.Math.Distance.Between(
         pointer.downX, pointer.downY, pointer.upX, pointer.upY,
       );
-      if (moved > 8) return;
+      if (moved > 5) return;
       this.onToolTap(view);
     });
     this.toolViews.set(data.id, view);
@@ -231,6 +232,7 @@ export class BoardScene extends Phaser.Scene {
           onComplete: () => {
             view.setDepth(0);
             this.flyingPieceIds.delete(piece.id);
+            this.playSparks(end.x, end.y, getLine(view.pieceData.lineId).color);
             // Tiny squash on landing.
             this.tweens.add({
               targets: view,
@@ -264,12 +266,104 @@ export class BoardScene extends Phaser.Scene {
   }
 
   private handlePieceDrop(view: PieceView, col: number, row: number): void {
-    const result = GameState.moveOrMerge(view.pieceData.id, col, row);
+    const src = view.pieceData;
+    const dst = GameState.pieceAt(col, row);
+    const willMerge =
+      !!dst && dst.id !== src.id && dst.lineId === src.lineId
+      && dst.level === src.level && dst.level < GameConfig.maxLevel;
+
+    if (willMerge && dst) {
+      const dstView = this.pieces.get(dst.id);
+      const { x, y } = this.cellCenter(col, row);
+      this.flyingPieceIds.add(src.id);
+      this.flyingPieceIds.add(dst.id);
+      view.setDepth(900);
+      this.tweens.add({
+        targets: view,
+        x, y,
+        scale: 0.7,
+        alpha: 0.55,
+        duration: 110,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          view.destroy();
+          this.pieces.delete(src.id);
+          this.flyingPieceIds.delete(src.id);
+          this.flyingPieceIds.delete(dst.id);
+          GameState.moveOrMerge(src.id, col, row);
+          this.playPuff(x, y);
+          if (dstView) {
+            dstView.setScale(0.6);
+            this.tweens.add({
+              targets: dstView,
+              scale: 1.18,
+              duration: 140,
+              ease: 'Back.easeOut',
+              onComplete: () => {
+                this.tweens.add({
+                  targets: dstView, scale: 1, duration: 110, ease: 'Sine.easeOut',
+                });
+              },
+            });
+          }
+        },
+      });
+      return;
+    }
+
+    const result = GameState.moveOrMerge(src.id, col, row);
     if (result) {
       const { x, y } = this.cellCenter(col, row);
       this.tweens.add({ targets: view, x, y, duration: 120, ease: 'Sine.easeOut' });
     } else {
       this.snapBack(view as unknown as Phaser.GameObjects.Container);
+    }
+  }
+
+  private playPuff(x: number, y: number): void {
+    const ring = this.add.graphics().setDepth(1200);
+    ring.lineStyle(4, 0xffffff, 0.9);
+    ring.strokeCircle(0, 0, 14);
+    ring.x = x; ring.y = y;
+    this.tweens.add({
+      targets: ring,
+      scale: 3.2,
+      alpha: 0,
+      duration: 320,
+      ease: 'Sine.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+    const flash = this.add.graphics().setDepth(1199);
+    flash.fillStyle(0xffffff, 0.55);
+    flash.fillCircle(0, 0, 28);
+    flash.x = x; flash.y = y;
+    this.tweens.add({
+      targets: flash,
+      scale: 1.8,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  private playSparks(x: number, y: number, color: number): void {
+    for (let i = 0; i < 6; i++) {
+      const dot = this.add.graphics().setDepth(1200);
+      dot.fillStyle(color, 1);
+      dot.fillCircle(0, 0, 3);
+      dot.x = x; dot.y = y;
+      const angle = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
+      const dist = 22 + Math.random() * 14;
+      this.tweens.add({
+        targets: dot,
+        x: x + Math.cos(angle) * dist,
+        y: y + Math.sin(angle) * dist + 6,
+        alpha: 0,
+        duration: 360,
+        ease: 'Quad.easeOut',
+        onComplete: () => dot.destroy(),
+      });
     }
   }
 
