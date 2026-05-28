@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { GameConfig } from '../config/gameConfig';
 import { GameState, PieceData, ToolData } from '../state/GameState';
-import { getLine } from '../config/lines';
 import { PieceView } from '../objects/Piece';
 import { ToolView } from '../objects/Tool';
 
@@ -186,13 +185,15 @@ export class BoardScene extends Phaser.Scene {
   /* ---------- interactions ---------- */
 
   private onToolTap(view: ToolView): void {
+    // Reserve the upcoming piece id as "flying" BEFORE state mutates, so the
+    // sync triggered by triggerTool() won't auto-create a static view for it.
+    const upcomingId = GameState.peekNextPieceId();
+    this.flyingPieceIds.add(upcomingId);
     const result = GameState.triggerTool(view.toolData.id);
-    if (result === 'no-stamina') {
-      this.flashCenter('体力不足', 0xff6b6b);
-      return;
-    }
-    if (result === 'board-full') {
-      this.flashCenter('棋盘满员了！', 0xffd166);
+    if (typeof result === 'string') {
+      this.flyingPieceIds.delete(upcomingId);
+      if (result === 'no-stamina') this.flashCenter('体力不足', 0xff6b6b);
+      else this.flashCenter('棋盘满员了！', 0xffd166);
       return;
     }
     view.press();
@@ -200,45 +201,54 @@ export class BoardScene extends Phaser.Scene {
     this.popStaminaCost(view.x, view.y);
   }
 
-  /** Animate a freshly-created piece flying from tool position to its destination cell. */
+  /**
+   * Toss a freshly-created piece from the tool to its destination cell.
+   * Snappy (~280ms): pop from scale 0 → peak at scale 1.15 at apex → land at scale 1,
+   * with a tiny squash bounce. No trail, no rotation, no sparks (per spec).
+   */
   private playSpawnToss(piece: PieceData, from: { col: number; row: number }): void {
     const start = this.cellCenter(from.col, from.row);
     const end = this.cellCenter(piece.col, piece.row);
-    const peakY = Math.min(start.y, end.y) - 90;
+    const dist = Phaser.Math.Distance.Between(start.x, start.y, end.x, end.y);
+    const arcHeight = Math.min(120, 60 + dist * 0.3);
+    const peakX = (start.x + end.x) / 2;
+    const peakY = Math.min(start.y, end.y) - arcHeight;
 
-    // Create the view at the start position, hidden from the normal sync flow.
+    // Create the view at start. flyingPieceIds was already set in onToolTap
+    // so syncFromState will leave it alone.
     const view = this.spawnPieceView(piece);
     view.x = start.x;
     view.y = start.y;
-    view.setScale(0.4);
+    view.setScale(0);
     view.setDepth(900);
-    this.flyingPieceIds.add(piece.id);
 
-    // Parabolic toss: two tweens chained — out & up, then down & in.
-    const duration = 380;
+    const upMs = 140;
+    const downMs = 130;
+
     this.tweens.add({
       targets: view,
-      x: end.x,
+      x: peakX,
       y: peakY,
-      scale: 1,
-      duration: duration / 2,
+      scale: 1.15,
+      duration: upMs,
       ease: 'Quad.easeOut',
       onComplete: () => {
         this.tweens.add({
           targets: view,
+          x: end.x,
           y: end.y,
-          duration: duration / 2,
+          scale: 1,
+          duration: downMs,
           ease: 'Quad.easeIn',
           onComplete: () => {
             view.setDepth(0);
             this.flyingPieceIds.delete(piece.id);
-            this.playSparks(end.x, end.y, getLine(view.pieceData.lineId).color);
-            // Tiny squash on landing.
+            // Snappy squash on landing.
             this.tweens.add({
               targets: view,
-              scaleY: 0.85,
-              scaleX: 1.1,
-              duration: 70,
+              scaleY: 0.88,
+              scaleX: 1.08,
+              duration: 60,
               yoyo: true,
               ease: 'Sine.easeInOut',
             });
@@ -347,25 +357,6 @@ export class BoardScene extends Phaser.Scene {
     });
   }
 
-  private playSparks(x: number, y: number, color: number): void {
-    for (let i = 0; i < 6; i++) {
-      const dot = this.add.graphics().setDepth(1200);
-      dot.fillStyle(color, 1);
-      dot.fillCircle(0, 0, 3);
-      dot.x = x; dot.y = y;
-      const angle = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
-      const dist = 22 + Math.random() * 14;
-      this.tweens.add({
-        targets: dot,
-        x: x + Math.cos(angle) * dist,
-        y: y + Math.sin(angle) * dist + 6,
-        alpha: 0,
-        duration: 360,
-        ease: 'Quad.easeOut',
-        onComplete: () => dot.destroy(),
-      });
-    }
-  }
 
   private handleToolDrop(view: ToolView, col: number, row: number): void {
     const ok = GameState.moveTool(view.toolData.id, col, row);

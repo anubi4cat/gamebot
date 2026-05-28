@@ -90,6 +90,12 @@ class GameStateClass {
     return this.data.pieces.find(p => p.id === id);
   }
 
+  /** The id the next spawned piece will receive. Lets the scene reserve it
+   *  as "flying" before triggerTool notifies subscribers. */
+  peekNextPieceId(): number {
+    return this.data.nextPieceId;
+  }
+
   toolById(id: number): ToolData | undefined {
     return this.data.tools.find(t => t.id === id);
   }
