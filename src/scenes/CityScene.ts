@@ -62,7 +62,11 @@ export class CityScene extends Phaser.Scene {
       this.buildingViews.set(def.id, view);
     }
 
-    GameState.subscribe(() => this.refresh());
+    const unsub = GameState.subscribe(() => this.refresh());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      unsub();
+      this.buildingViews.clear();
+    });
     this.refresh();
   }
 

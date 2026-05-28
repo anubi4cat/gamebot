@@ -22,7 +22,11 @@ export class HudScene extends Phaser.Scene {
     this.buildTaskStrip();
     this.buildCityButton();
 
-    GameState.subscribe(() => this.refresh());
+    const unsub = GameState.subscribe(() => this.refresh());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      unsub();
+      this.taskCards = [];
+    });
     this.time.addEvent({
       delay: 500,
       loop: true,

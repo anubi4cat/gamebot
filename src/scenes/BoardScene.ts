@@ -82,7 +82,14 @@ export class BoardScene extends Phaser.Scene {
       }
     });
 
-    GameState.subscribe(() => this.syncFromState());
+    const unsub = GameState.subscribe(() => this.syncFromState());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      unsub();
+      this.pieces.clear();
+      this.toolViews.clear();
+      this.flyingPieceIds.clear();
+      this.dropZones = [];
+    });
   }
 
   /* ---------- rendering ---------- */
@@ -210,7 +217,7 @@ export class BoardScene extends Phaser.Scene {
     const start = this.cellCenter(from.col, from.row);
     const end = this.cellCenter(piece.col, piece.row);
     const dist = Phaser.Math.Distance.Between(start.x, start.y, end.x, end.y);
-    const arcHeight = Math.min(120, 60 + dist * 0.3);
+    const arcHeight = Math.min(55, 25 + dist * 0.15);
     const peakX = (start.x + end.x) / 2;
     const peakY = Math.min(start.y, end.y) - arcHeight;
 
@@ -229,7 +236,7 @@ export class BoardScene extends Phaser.Scene {
       targets: view,
       x: peakX,
       y: peakY,
-      scale: 1.15,
+      scale: 1.05,
       duration: upMs,
       ease: 'Quad.easeOut',
       onComplete: () => {
@@ -243,12 +250,12 @@ export class BoardScene extends Phaser.Scene {
           onComplete: () => {
             view.setDepth(0);
             this.flyingPieceIds.delete(piece.id);
-            // Snappy squash on landing.
+            // Subtle landing squash.
             this.tweens.add({
               targets: view,
-              scaleY: 0.88,
-              scaleX: 1.08,
-              duration: 60,
+              scaleY: 0.94,
+              scaleX: 1.04,
+              duration: 55,
               yoyo: true,
               ease: 'Sine.easeInOut',
             });
