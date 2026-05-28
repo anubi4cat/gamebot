@@ -3,6 +3,7 @@ import { GameConfig } from '../config/gameConfig';
 import { GameState } from '../state/GameState';
 import { NPCS, TaskInstance } from '../config/tasks';
 import { getPieceName, getLine } from '../config/lines';
+import { switchScene, fadeInScene } from './transition';
 
 /**
  * Persistent overlay: top resource bar, NPC task strip, and bottom city-switch button.
@@ -18,6 +19,7 @@ export class HudScene extends Phaser.Scene {
   constructor() { super('Hud'); }
 
   create(): void {
+    fadeInScene(this);
     this.buildTopBar();
     this.buildTaskStrip();
     this.buildCityButton();
@@ -215,7 +217,7 @@ export class HudScene extends Phaser.Scene {
     g.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 14);
     g.lineStyle(2, 0xffffff, 0.4);
     g.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 14);
-    const label = this.add.text(0, 0, '城市', {
+    const label = this.add.text(0, 0, '🏛 城市', {
       fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
       fontSize: '22px',
       color: '#ffffff',
@@ -225,9 +227,7 @@ export class HudScene extends Phaser.Scene {
     c.setSize(btnW, btnH);
     c.setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains);
     c.on('pointerup', () => {
-      this.scene.stop('Board');
-      this.scene.stop('Hud');
-      this.scene.launch('City');
+      switchScene(this, ['Board', 'Hud'], ['City']);
     });
     this.cityBtn = c;
   }

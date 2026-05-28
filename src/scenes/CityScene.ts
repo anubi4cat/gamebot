@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameState } from '../state/GameState';
 import { BUILDINGS, BuildingDef } from '../config/buildings';
+import { switchScene, fadeInScene } from './transition';
 
 /**
  * City rebuild scene. Each building is rendered as a placeholder rectangle
@@ -13,6 +14,7 @@ export class CityScene extends Phaser.Scene {
   constructor() { super('City'); }
 
   create(): void {
+    fadeInScene(this);
     const { width, height } = this.scale.gameSize;
 
     // Sky gradient backdrop.
@@ -42,19 +44,9 @@ export class CityScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(1, 0.5);
 
-    // Back button.
-    const back = this.add.text(16, 35, '< 返回', {
-      fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#3b4a5e',
-      padding: { left: 12, right: 12, top: 6, bottom: 6 },
-    }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
-    back.on('pointerup', () => {
-      this.scene.stop();
-      this.scene.launch('Board');
-      this.scene.launch('Hud');
-    });
+    // Toggle back to board — matches HudScene cityBtn position & style so it
+    // visually reads as the same button just relabeled.
+    this.buildBoardToggle(width, height);
 
     // Buildings.
     for (const def of BUILDINGS) {
@@ -73,6 +65,32 @@ export class CityScene extends Phaser.Scene {
   private refresh(): void {
     this.gemText.setText(`💎 ${GameState.gem}`);
     for (const view of this.buildingViews.values()) view.refresh();
+  }
+
+  private buildBoardToggle(w: number, h: number): void {
+    const btnW = 120;
+    const btnH = 64;
+    const c = this.add.container(w - btnW / 2 - 16, h - btnH / 2 - 16);
+    const g = this.add.graphics();
+    g.fillStyle(0xc88a4a, 1);
+    g.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 14);
+    g.lineStyle(2, 0xffffff, 0.4);
+    g.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 14);
+    const label = this.add.text(0, 0, '← 棋盘', {
+      fontFamily: '"PingFang SC","Microsoft YaHei",sans-serif',
+      fontSize: '22px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    c.add([g, label]);
+    c.setSize(btnW, btnH);
+    c.setInteractive(
+      new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    c.on('pointerup', () => {
+      switchScene(this, ['City'], ['Board', 'Hud']);
+    });
   }
 }
 

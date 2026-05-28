@@ -3,6 +3,7 @@ import { GameConfig } from '../config/gameConfig';
 import { GameState, PieceData, ToolData } from '../state/GameState';
 import { PieceView } from '../objects/Piece';
 import { ToolView } from '../objects/Tool';
+import { fadeInScene } from './transition';
 
 const BOARD_MARGIN_X = 16;
 const BOARD_TOP = 220;
@@ -27,6 +28,7 @@ export class BoardScene extends Phaser.Scene {
   constructor() { super('Board'); }
 
   create(): void {
+    fadeInScene(this);
     const { width, height } = this.scale.gameSize;
     const { cols, rows } = GameConfig.board;
 
